@@ -7,8 +7,12 @@ const BarcodeScanner = () => {
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [hasPermission, setHasPermission] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
 
     useEffect(() => {
+        let codeReader = null;
+        let stream = null;
+
         const startScanner = async () => {
             try {
                 // Check if we're on a mobile device
@@ -20,45 +24,80 @@ const BarcodeScanner = () => {
                     return;
                 }
 
-                // Request camera permission
-                const stream = await navigator.mediaDevices.getUserMedia({
+                // Request camera permission with better constraints
+                stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: 'environment', // Use back camera on mobile
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { min: 640, ideal: 1280, max: 1920 },
+                        height: { min: 480, ideal: 720, max: 1080 },
+                        aspectRatio: { ideal: 1.7777777778 } // 16:9
                     }
                 });
+
+                // Set the video stream
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.play();
+                }
 
                 setHasPermission(true);
                 setIsLoading(false);
 
-                const codeReader = new BrowserMultiFormatReader();
-                let isScanning = true;
+                // Wait a bit for video to be ready
+                setTimeout(() => {
+                    try {
+                        codeReader = new BrowserMultiFormatReader();
+                        setIsScanning(true);
 
-                codeReader
-                    .decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
-                        if (result && isScanning) {
-                            setBarcode(result.getText());
-                            isScanning = false;
-                            codeReader.reset(); // stop scanning after success
-                        }
-                        if (err && !(err.name === 'NotFoundException')) {
-                            setError(err.message || 'Unknown error');
-                        }
-                    })
-                    .catch((err) => setError(err.message));
+                        codeReader
+                            .decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
+                                if (result && isScanning) {
+                                    setBarcode(result.getText());
+                                    setIsScanning(false);
+                                    if (codeReader) {
+                                        codeReader.reset();
+                                    }
+                                }
+                                if (err && !(err.name === 'NotFoundException')) {
+                                    console.log('ZXing error:', err);
+                                    // Don't set error for NotFoundException as it's normal
+                                    if (err.name !== 'NotFoundException') {
+                                        setError(err.message || 'Unknown error');
+                                    }
+                                }
+                            })
+                            .catch((err) => {
+                                console.error('ZXing initialization error:', err);
+                                setError('Failed to initialize scanner: ' + err.message);
+                            });
+                    } catch (err) {
+                        console.error('CodeReader creation error:', err);
+                        setError('Failed to create scanner: ' + err.message);
+                    }
+                }, 1000); // Wait 1 second for video to be ready
 
-                return () => {
-                    codeReader.reset(); // Cleanup
-                    stream.getTracks().forEach(track => track.stop());
-                };
             } catch (err) {
+                console.error('Camera permission error:', err);
                 setError('Camera permission denied or not available: ' + err.message);
                 setIsLoading(false);
             }
         };
 
         startScanner();
+
+        // Cleanup function
+        return () => {
+            if (codeReader) {
+                try {
+                    codeReader.reset();
+                } catch (e) {
+                    console.log('Cleanup error:', e);
+                }
+            }
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
     }, []);
 
     return (
@@ -108,6 +147,20 @@ const BarcodeScanner = () => {
                         border: '1px solid #ffcccb'
                     }}>
                         ⚠️ Error: <strong>{error}</strong>
+                        <button
+                            onClick={() => window.location.reload()}
+                            style={{
+                                marginLeft: '10px',
+                                padding: '5px 10px',
+                                backgroundColor: '#007bff',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            🔄 Retry
+                        </button>
                     </div>
                 )}
                 {hasPermission && !barcode && !error && !isLoading && (
@@ -118,7 +171,16 @@ const BarcodeScanner = () => {
                         borderRadius: 8,
                         border: '1px solid #ddd'
                     }}>
-                        📱 Point your camera at a barcode to scan...
+                        {isScanning ? (
+                            <div>
+                                🔍 Scanning for barcodes...
+                                <div style={{ fontSize: '12px', marginTop: '5px', color: '#888' }}>
+                                    Make sure the barcode is well-lit and clearly visible
+                                </div>
+                            </div>
+                        ) : (
+                            <div>📱 Point your camera at a barcode to scan...</div>
+                        )}
                     </div>
                 )}
             </div>

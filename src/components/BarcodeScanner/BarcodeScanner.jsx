@@ -128,7 +128,7 @@ const BarcodeScanner = () => {
 
     return (
         <div style={{ padding: 20, maxWidth: '100%', textAlign: 'center' }}>
-            <h2>📷 Mobile Barcode Scanner</h2>
+            <h2>📷 Barcode Scanner</h2>
 
             {isLoading && (
                 <div style={{ color: '#666', fontSize: 16, margin: '20px 0' }}>
@@ -228,8 +228,6 @@ const BarcodeScanner = () => {
                 backgroundColor: '#f5f5f5',
                 borderRadius: 8
             }}>
-                <p>💡 Tip: This scanner works best on mobile devices with a back camera</p>
-                <p>🔒 Camera permission is required for scanning</p>
                 <p>📊 Debug: Retry count: {retryCount}</p>
                 <p>📱 User Agent: {navigator.userAgent.substring(0, 50)}...</p>
                 <details style={{ marginTop: '10px' }}>

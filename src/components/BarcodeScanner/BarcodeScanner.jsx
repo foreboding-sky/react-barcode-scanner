@@ -10,22 +10,35 @@ const BarcodeScanner = () => {
     const [hasPermission, setHasPermission] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
+    const [logs, setLogs] = useState([]);
+
+    // Function to add logs
+    const addLog = (message) => {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = `[${timestamp}] ${message}`;
+        setLogs(prev => [...prev, logEntry]);
+        console.log(logEntry); // Also log to console for debugging
+    };
 
     useEffect(() => {
         let codeReader = null;
         let stream = null;
 
         const startScanner = async () => {
+            addLog('Starting scanner initialization...');
             try {
                 // Check if we're on a mobile device
                 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                addLog(`Device check: ${isMobile ? 'Mobile device detected' : 'Desktop device detected'}`);
 
                 if (!isMobile) {
+                    addLog('Desktop device - setting error message');
                     setError('This scanner works best on mobile devices with a camera');
                     setIsLoading(false);
                     return;
                 }
 
+                addLog('Requesting camera permission...');
                 // Request camera permission with better constraints
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
@@ -35,20 +48,27 @@ const BarcodeScanner = () => {
                         aspectRatio: { ideal: 1.7777777778 } // 16:9
                     }
                 });
+                addLog('Camera permission granted!');
 
                 // Set the video stream
                 if (videoRef.current) {
+                    addLog('Setting video stream to video element...');
                     videoRef.current.srcObject = stream;
+                    addLog('Calling video.play()...');
                     await videoRef.current.play();
-                    console.log('Video stream started successfully');
-                    console.log('Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight);
+                    addLog('Video.play() completed');
+                    addLog(`Video dimensions: ${videoRef.current.videoWidth} x ${videoRef.current.videoHeight}`);
+                } else {
+                    addLog('ERROR: videoRef.current is null!');
                 }
 
                 setHasPermission(true);
                 setIsLoading(false);
+                addLog('Camera setup completed, waiting for video to be ready...');
 
                 // Wait a bit for video to be ready
                 setTimeout(() => {
+                    addLog('Starting barcode detection setup...');
                     try {
                         // Configure hints for better barcode detection
                         const hints = new Map();
@@ -69,16 +89,18 @@ const BarcodeScanner = () => {
                         hints.set(DecodeHintType.TRY_HARDER, true);
                         hints.set(DecodeHintType.CHARACTER_SET, 'UTF-8');
 
+                        addLog('Creating BrowserMultiFormatReader...');
                         codeReader = new BrowserMultiFormatReader(hints);
                         setIsScanning(true);
+                        addLog('BrowserMultiFormatReader created successfully');
 
-                        console.log('Starting barcode detection...');
-                        console.log('Supported formats:', hints.get(DecodeHintType.POSSIBLE_FORMATS));
+                        addLog('Starting barcode detection...');
+                        addLog('Supported formats: ' + hints.get(DecodeHintType.POSSIBLE_FORMATS).join(', '));
 
                         codeReader
                             .decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
                                 if (result && isScanning) {
-                                    console.log('Barcode detected:', result.getText(), 'Format:', result.getBarcodeFormat());
+                                    addLog(`Barcode detected: ${result.getText()} (Format: ${result.getBarcodeFormat()})`);
                                     setBarcode(result.getText());
                                     setIsScanning(false);
                                     if (codeReader) {
@@ -86,7 +108,7 @@ const BarcodeScanner = () => {
                                     }
                                 }
                                 if (err) {
-                                    console.log('ZXing error:', err.name, err.message);
+                                    addLog(`ZXing error: ${err.name} - ${err.message}`);
                                     // Don't set error for NotFoundException as it's normal
                                     if (err.name !== 'NotFoundException') {
                                         setError(err.message || 'Unknown error');
@@ -94,16 +116,19 @@ const BarcodeScanner = () => {
                                 }
                             })
                             .catch((err) => {
+                                addLog(`ZXing initialization error: ${err.message}`);
                                 console.error('ZXing initialization error:', err);
                                 setError('Failed to initialize scanner: ' + err.message);
                             });
                     } catch (err) {
+                        addLog(`CodeReader creation error: ${err.message}`);
                         console.error('CodeReader creation error:', err);
                         setError('Failed to create scanner: ' + err.message);
                     }
                 }, 2000); // Wait 2 seconds for video to be ready
 
             } catch (err) {
+                addLog(`Camera permission error: ${err.message}`);
                 console.error('Camera permission error:', err);
                 setError('Camera permission denied or not available: ' + err.message);
                 setIsLoading(false);
@@ -114,15 +139,19 @@ const BarcodeScanner = () => {
 
         // Cleanup function
         return () => {
+            addLog('Cleaning up scanner...');
             if (codeReader) {
                 try {
                     codeReader.reset();
+                    addLog('CodeReader reset completed');
                 } catch (e) {
+                    addLog(`Cleanup error: ${e.message}`);
                     console.log('Cleanup error:', e);
                 }
             }
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
+                addLog('Camera stream stopped');
             }
         };
     }, []);
@@ -176,6 +205,7 @@ const BarcodeScanner = () => {
                         ⚠️ Error: <strong>{error}</strong>
                         <button
                             onClick={() => {
+                                addLog('Retry button clicked - reloading page');
                                 setRetryCount(prev => prev + 1);
                                 setError(null);
                                 setBarcode(null);
@@ -238,6 +268,44 @@ const BarcodeScanner = () => {
                         <p>Video Ready: {videoRef.current ? '✅ Yes' : '❌ No'}</p>
                         <p>Scanning Status: {isScanning ? '✅ Active' : '❌ Inactive'}</p>
                         <p>Loading: {isLoading ? '✅ Yes' : '❌ No'}</p>
+                    </div>
+                </details>
+
+                <details style={{ marginTop: '10px' }}>
+                    <summary style={{ cursor: 'pointer', color: '#007bff' }}>📋 Debug Logs</summary>
+                    <div style={{ marginTop: '5px' }}>
+                        <textarea
+                            readOnly
+                            value={logs.join('\n')}
+                            style={{
+                                width: '100%',
+                                height: '200px',
+                                fontSize: '10px',
+                                fontFamily: 'monospace',
+                                backgroundColor: '#000',
+                                color: '#0f0',
+                                border: '1px solid #333',
+                                padding: '5px'
+                            }}
+                        />
+                        <button
+                            onClick={() => {
+                                setLogs([]);
+                                addLog('Logs cleared');
+                            }}
+                            style={{
+                                marginTop: '5px',
+                                padding: '3px 8px',
+                                backgroundColor: '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                fontSize: '10px'
+                            }}
+                        >
+                            Clear Logs
+                        </button>
                     </div>
                 </details>
             </div>

@@ -161,13 +161,11 @@ const BarcodeScanner = () => {
     return (
         <div style={{ padding: 20, maxWidth: '100%', textAlign: 'center' }}>
             <h2>📷 Barcode Scanner</h2>
-
             {isLoading && (
                 <div style={{ color: '#666', fontSize: 16, margin: '20px 0' }}>
                     🔄 Initializing camera...
                 </div>
             )}
-
             {hasPermission && (
                 <video
                     ref={videoRef}
@@ -182,7 +180,6 @@ const BarcodeScanner = () => {
                     muted
                 />
             )}
-
             <div style={{ marginTop: 20 }}>
                 {barcode && (
                     <div style={{
@@ -194,41 +191,6 @@ const BarcodeScanner = () => {
                         border: '1px solid #90EE90'
                     }}>
                         ✅ Scanned: <strong>{barcode}</strong>
-                    </div>
-                )}
-                {error && (
-                    <div style={{
-                        color: 'red',
-                        padding: '15px',
-                        backgroundColor: '#fff0f0',
-                        borderRadius: 8,
-                        border: '1px solid #ffcccb'
-                    }}>
-                        ⚠️ Error: <strong>{error}</strong>
-                        <button
-                            onClick={() => {
-                                addLog('Retry button clicked - reloading page');
-                                setRetryCount(prev => prev + 1);
-                                setError(null);
-                                setBarcode(null);
-                                setIsScanning(false);
-                                // Force re-initialization
-                                setTimeout(() => {
-                                    window.location.reload();
-                                }, 100);
-                            }}
-                            style={{
-                                marginLeft: '10px',
-                                padding: '5px 10px',
-                                backgroundColor: '#007bff',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            🔄 Retry ({retryCount})
-                        </button>
                     </div>
                 )}
                 {hasPermission && !barcode && !error && !isLoading && (
@@ -252,7 +214,6 @@ const BarcodeScanner = () => {
                     </div>
                 )}
             </div>
-
             <div style={{
                 marginTop: 30,
                 fontSize: 14,
@@ -261,55 +222,43 @@ const BarcodeScanner = () => {
                 backgroundColor: '#f5f5f5',
                 borderRadius: 8
             }}>
+                <div style={{ marginTop: '5px' }}>
+                    <textarea
+                        readOnly
+                        value={logs.join('\n')}
+                        style={{
+                            width: '100%',
+                            height: '200px',
+                            fontSize: '10px',
+                            fontFamily: 'monospace',
+                            backgroundColor: '#000',
+                            color: '#0f0',
+                            border: '1px solid #333',
+                            padding: '5px'
+                        }}
+                    />
+                    <button
+                        onClick={() => {
+                            setLogs([]);
+                            addLog('Logs cleared');
+                        }}
+                        style={{
+                            marginTop: '5px',
+                            padding: '3px 8px',
+                            backgroundColor: '#dc3545',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            fontSize: '10px'
+                        }}
+                    >
+                        Clear Logs
+                    </button>
+                </div>
+
                 <p>📊 Debug: Retry count: {retryCount}</p>
                 <p>📱 User Agent: {navigator.userAgent.substring(0, 50)}...</p>
-                <details style={{ marginTop: '10px' }}>
-                    <summary style={{ cursor: 'pointer', color: '#007bff' }}>🔍 Debug Info</summary>
-                    <div style={{ marginTop: '5px', fontSize: '12px', textAlign: 'left' }}>
-                        <p>Camera Permission: {hasPermission ? '✅ Granted' : '❌ Not granted'}</p>
-                        <p>Video Ready: {videoRef.current ? '✅ Yes' : '❌ No'}</p>
-                        <p>Scanning Status: {isScanning ? '✅ Active' : '❌ Inactive'}</p>
-                        <p>Loading: {isLoading ? '✅ Yes' : '❌ No'}</p>
-                    </div>
-                </details>
-
-                <details style={{ marginTop: '10px' }}>
-                    <summary style={{ cursor: 'pointer', color: '#007bff' }}>📋 Debug Logs</summary>
-                    <div style={{ marginTop: '5px' }}>
-                        <textarea
-                            readOnly
-                            value={logs.join('\n')}
-                            style={{
-                                width: '100%',
-                                height: '200px',
-                                fontSize: '10px',
-                                fontFamily: 'monospace',
-                                backgroundColor: '#000',
-                                color: '#0f0',
-                                border: '1px solid #333',
-                                padding: '5px'
-                            }}
-                        />
-                        <button
-                            onClick={() => {
-                                setLogs([]);
-                                addLog('Logs cleared');
-                            }}
-                            style={{
-                                marginTop: '5px',
-                                padding: '3px 8px',
-                                backgroundColor: '#dc3545',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '3px',
-                                cursor: 'pointer',
-                                fontSize: '10px'
-                            }}
-                        >
-                            Clear Logs
-                        </button>
-                    </div>
-                </details>
             </div>
         </div>
     );

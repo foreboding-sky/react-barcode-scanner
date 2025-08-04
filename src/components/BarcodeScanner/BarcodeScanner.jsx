@@ -99,14 +99,23 @@ const BarcodeScanner = () => {
 
                         codeReader
                             .decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
-                                if (result && isScanning) {
-                                    addLog(`Barcode detected: ${result.getText()} (Format: ${result.getBarcodeFormat()})`);
-                                    setBarcode(result.getText());
-                                    setIsScanning(false);
-                                    if (codeReader) {
-                                        codeReader.reset();
+                                addLog(`Callback called - result: ${result ? 'YES' : 'NO'}, isScanning: ${isScanning}, error: ${err ? err.name : 'NONE'}`);
+
+                                if (result) {
+                                    addLog(`Result received: ${result.getText()} (Format: ${result.getBarcodeFormat()})`);
+                                    addLog(`Full result object: ${JSON.stringify(result, null, 2)}`);
+                                    if (isScanning) {
+                                        addLog('Setting barcode and stopping scan');
+                                        setBarcode(result.getText());
+                                        setIsScanning(false);
+                                        if (codeReader) {
+                                            codeReader.reset();
+                                        }
+                                    } else {
+                                        addLog('Result received but isScanning is false - ignoring');
                                     }
                                 }
+
                                 if (err) {
                                     addLog(`ZXing error: ${err.name} - ${err.message}`);
                                     // Don't set error for NotFoundException as it's normal

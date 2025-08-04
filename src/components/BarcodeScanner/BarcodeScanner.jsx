@@ -3,6 +3,7 @@ import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/
 
 const BarcodeScanner = () => {
     const videoRef = useRef(null);
+    const canvasRef = useRef(null); // Hidden canvas for manual scan
     const [barcode, setBarcode] = useState(null);
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -15,41 +16,48 @@ const BarcodeScanner = () => {
     const codeReaderRef = useRef(null);
     const streamRef = useRef(null);
 
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.CODABAR,
+        BarcodeFormat.ITF,
+        BarcodeFormat.PDF_417,
+        BarcodeFormat.AZTEC,
+        BarcodeFormat.DATA_MATRIX
+    ]);
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    hints.set(DecodeHintType.CHARACTER_SET, 'UTF-8');
+
     const startScanner = async () => {
         try {
-            // Check if we're on a mobile device
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
             if (!isMobile) {
                 setError('This scanner works best on mobile devices with a camera');
                 setIsLoading(false);
                 return;
             }
-
-            // Request camera permission with better constraints
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    facingMode: 'environment', // Use back camera on mobile
+                    facingMode: 'environment',
                     width: { min: 640, ideal: 1280, max: 1920 },
                     height: { min: 480, ideal: 720, max: 1080 },
-                    aspectRatio: { ideal: 1.7777777778 } // 16:9
+                    aspectRatio: { ideal: 1.7777777778 }
                 }
             });
-
             streamRef.current = stream;
-
-            // Set the video stream
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 await videoRef.current.play();
-                console.log('Video stream started successfully');
-                console.log('Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight);
             }
-
             setHasPermission(true);
             setIsLoading(false);
-
-            // Wait for video to be fully ready before starting barcode detection
+            // Wait for video to be ready
             const waitForVideoReady = () => {
                 if (videoRef.current && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
                     setVideoReady(true);
@@ -59,9 +67,7 @@ const BarcodeScanner = () => {
                 }
             };
             waitForVideoReady();
-
         } catch (err) {
-            console.error('Camera permission error:', err);
             setError('Camera permission denied or not available: ' + err.message);
             setIsLoading(false);
         }
@@ -69,104 +75,58 @@ const BarcodeScanner = () => {
 
     const startBarcodeDetection = () => {
         try {
-            // Configure hints for better barcode detection
-            const hints = new Map();
-            hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-                BarcodeFormat.QR_CODE,
-                BarcodeFormat.CODE_128,
-                BarcodeFormat.CODE_39,
-                BarcodeFormat.EAN_13,
-                BarcodeFormat.EAN_8,
-                BarcodeFormat.UPC_A,
-                BarcodeFormat.UPC_E,
-                BarcodeFormat.CODABAR,
-                BarcodeFormat.ITF,
-                BarcodeFormat.PDF_417,
-                BarcodeFormat.AZTEC,
-                BarcodeFormat.DATA_MATRIX
-            ]);
-            hints.set(DecodeHintType.TRY_HARDER, true);
-            hints.set(DecodeHintType.CHARACTER_SET, 'UTF-8');
-
             const codeReader = new BrowserMultiFormatReader(hints);
             codeReaderRef.current = codeReader;
             setIsScanning(true);
-
-            console.log('Starting barcode detection...');
-            console.log('Supported formats:', hints.get(DecodeHintType.POSSIBLE_FORMATS));
-
-            codeReader
-                .decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
-                    if (result && isScanning) {
-                        console.log('Barcode detected:', result.getText(), 'Format:', result.getBarcodeFormat());
-                        setBarcode(result.getText());
-                        setIsScanning(false);
-                        if (codeReaderRef.current) {
-                            codeReaderRef.current.reset();
-                        }
+            codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
+                if (result && isScanning) {
+                    setBarcode(result.getText());
+                    setIsScanning(false);
+                    if (codeReaderRef.current) {
+                        codeReaderRef.current.reset();
                     }
-                    if (err) {
-                        console.log('ZXing error:', err.name, err.message);
-                        // Don't set error for NotFoundException as it's normal
-                        if (err.name !== 'NotFoundException') {
-                            setError(err.message || 'Unknown error');
-                        } else {
-                            // Log NotFoundException for debugging but don't show as error
-                            console.log('No barcode detected in frame - this is normal during scanning');
-                        }
+                }
+                if (err) {
+                    if (err.name !== 'NotFoundException') {
+                        setError(err.message || 'Unknown error');
                     }
-                })
-                .catch((err) => {
-                    console.error('ZXing initialization error:', err);
-                    setError('Failed to initialize scanner: ' + err.message);
-                });
+                }
+            }).catch((err) => {
+                setError('Failed to initialize scanner: ' + err.message);
+            });
         } catch (err) {
-            console.error('CodeReader creation error:', err);
             setError('Failed to create scanner: ' + err.message);
         }
     };
 
-    const handleRetry = () => {
-        // Clean up existing resources
-        if (codeReaderRef.current) {
-            try {
-                codeReaderRef.current.reset();
-                codeReaderRef.current = null;
-            } catch (e) {
-                console.log('Cleanup error:', e);
-            }
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-        }
-
-        // Reset state
+    // Manual scan: decode current video frame only
+    const manualScan = async () => {
         setRetryCount(prev => prev + 1);
         setError(null);
         setBarcode(null);
-        setIsScanning(false);
-        setVideoReady(false);
-        setIsLoading(true);
-        setHasPermission(false);
-
-        // Restart scanner without page reload
-        setTimeout(() => {
-            startScanner();
-        }, 100);
+        if (!videoRef.current || !canvasRef.current) return;
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        try {
+            const codeReader = new BrowserMultiFormatReader(hints);
+            const result = await codeReader.decodeFromCanvas(canvas);
+            setBarcode(result.getText());
+        } catch (err) {
+            setError(err.message || 'No barcode found');
+        }
     };
 
     useEffect(() => {
         startScanner();
-
-        // Cleanup function
         return () => {
             if (codeReaderRef.current) {
                 try {
                     codeReaderRef.current.reset();
-                } catch (e) {
-                    console.log('Cleanup error:', e);
-                }
+                } catch (e) { }
             }
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop());
@@ -177,13 +137,11 @@ const BarcodeScanner = () => {
     return (
         <div style={{ padding: 20, maxWidth: '100%', textAlign: 'center' }}>
             <h2>📷 Barcode Scanner</h2>
-
             {isLoading && (
                 <div style={{ color: '#666', fontSize: 16, margin: '20px 0' }}>
                     🔄 Initializing camera...
                 </div>
             )}
-
             {hasPermission && (
                 <video
                     ref={videoRef}
@@ -198,7 +156,8 @@ const BarcodeScanner = () => {
                     muted
                 />
             )}
-
+            {/* Hidden canvas for manual scan */}
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
             <div style={{ marginTop: 20 }}>
                 {barcode && (
                     <div style={{
@@ -222,7 +181,7 @@ const BarcodeScanner = () => {
                     }}>
                         ⚠️ Error: <strong>{error}</strong>
                         <button
-                            onClick={handleRetry}
+                            onClick={manualScan}
                             style={{
                                 marginLeft: '10px',
                                 padding: '5px 10px',
@@ -258,7 +217,6 @@ const BarcodeScanner = () => {
                     </div>
                 )}
             </div>
-
             <div style={{
                 marginTop: 30,
                 fontSize: 14,
